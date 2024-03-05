@@ -15,8 +15,13 @@ object AccountService:
 
 class AccountServiceImpl(state: Ref.Synchronized[Map[String, Int]]) extends AccountService:
 
+  private def withDelay[R, E, A](delay: Option[Int])(zio: ZIO[R, E, A]): ZIO[R, E, A] =
+    delay.fold(zio)(d =>
+      ZIO.logWarning(s"delaying response for $d seconds") *> ZIO.sleep(Duration.fromSeconds(d)) *> zio
+    )
+
   def createAccount(accountId: String, delay: Option[Int]): ZIO[Any, AccountAlreadyExists, Unit] =
-    ZIO.sleep(Duration.fromSeconds(delay.getOrElse(0))) *>
+    withDelay(delay) {
       state.updateZIO { map =>
         if map.contains(accountId) then
           ZIO.logError(s"Account $accountId already exists") *> ZIO.fail(
@@ -24,9 +29,10 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[String, Int]]) extends Acco
           )
         else ZIO.succeed(map.updated(accountId, 0)) <* ZIO.logInfo(s"Account $accountId created")
       }
+    }
 
   def deposit(accountId: String, amount: Int, delay: Option[Int]): ZIO[Any, AccountNotFound, Unit] =
-    ZIO.sleep(Duration.fromSeconds(delay.getOrElse(0))) *>
+    withDelay(delay) {
       state.updateZIO { map =>
         if map.contains(accountId) then
           ZIO.succeed(map.updated(accountId, map(accountId) + amount)) <* ZIO.logInfo(
@@ -34,13 +40,14 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[String, Int]]) extends Acco
           )
         else ZIO.logError(s"Account $accountId not found") *> ZIO.fail(AccountNotFound(accountId))
       }
+    }
 
   def withdraw(
       accountId: String,
       amount: Int,
       delay: Option[Int]
   ): ZIO[Any, AccountNotFound | InsufficientFunds, Unit] =
-    ZIO.sleep(Duration.fromSeconds(delay.getOrElse(0))) *>
+    withDelay(delay) {
       state.updateZIO { map =>
         if map.contains(accountId) then
           if map(accountId) >= amount then
@@ -56,10 +63,12 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[String, Int]]) extends Acco
             AccountNotFound(accountId)
           )
       }
+    }
 
   def balance(accountId: String, delay: Option[Int]): ZIO[Any, AccountNotFound, Int] =
-    ZIO.sleep(Duration.fromSeconds(delay.getOrElse(0))) *>
+    withDelay(delay) {
       state.get.flatMap(map =>
         if map.contains(accountId) then ZIO.succeed(map(accountId)) <* ZIO.logInfo(s"Balance of account $accountId")
         else ZIO.logError(s"Account $accountId not found") *> ZIO.fail(AccountNotFound(accountId))
       )
+    }

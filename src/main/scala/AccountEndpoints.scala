@@ -21,27 +21,27 @@ object AccountEndpoints:
     Endpoint(Method.POST / string("accountId"))
       .query(delayQuery)
       .out[Unit]
-      .outError[AccountAlreadyExists](Status.Conflict)
+      .outError[AccountAlreadyExists](Status.Conflict) ?? Doc.h2("creates a new account")
 
   val deposit =
     Endpoint(Method.POST / string("accountId") / "deposit" / int("amount"))
       .query(delayQuery)
       .out[Unit]
-      .outError[AccountNotFound](Status.NotFound)
+      .outError[AccountNotFound](Status.NotFound) ?? Doc.h2("deposits money into given account")
 
   val withdraw = Endpoint(Method.POST / string("accountId") / "withdraw" / int("amount"))
     .query(delayQuery)
     .out[Unit]
     .outErrors(
-      HttpCodec.error[AccountNotFound](Status.NotFound),
-      HttpCodec.error[InsufficientFunds](Status.BadRequest)
-    )
+      HttpCodec.error[AccountNotFound](Status.NotFound) ?? Doc.p("could not find this account"),
+      HttpCodec.error[InsufficientFunds](Status.BadRequest) ?? Doc.p("withdrawal failed due to insufficient funds")
+    ) ?? Doc.h2("withdraws money from given account")
 
   val balance =
     Endpoint(Method.GET / string("accountId") / "balance")
       .query(delayQuery)
       .outError[AccountNotFound](Status.NotFound)
-      .out[Int]
+      .out[Int] ?? Doc.h2("returns the balance of given account")
 
   val openApi = OpenAPIGen.fromEndpoints(
     "Bank Account API",
