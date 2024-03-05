@@ -51,17 +51,6 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[String, Int]]) extends Acco
       value <- zio
     } yield value
 
-    // val delayed = delay.fold(zio)(d =>
-    //   ZIO.logWarning(s"delaying response for $d seconds") *> ZIO.sleep(Duration.fromSeconds(d)) *> zio
-    // )
-    // die.fold(delayed)(d =>
-    //   if d then
-    //     ZIO.logError(s"failing response intentionally as requested") *> ZIO.fail(
-    //       UnexpectedServerError("server encountered an unexpected error")
-    //     )
-    //   else delayed
-    // )
-
   def createAccount(
       accountId: String,
       delay: Option[Int],
