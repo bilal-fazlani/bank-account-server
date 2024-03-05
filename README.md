@@ -11,3 +11,4 @@ The server starts at port 9000
 
 Swagger UI is available at http://localhost:9000/docs/openapi
 
+![Swagger UI](./apis.jpg)
