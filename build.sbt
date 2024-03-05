@@ -9,6 +9,7 @@ lazy val root = project
     version := "0.1.0-SNAPSHOT",
     scalaVersion := scala3Version,
     resolvers ++= Resolver.sonatypeOssRepos("snapshots"),
+    organization := "com.bilal-fazlani",
     libraryDependencies ++= Seq(
       ZIO %% "zio" % zioVersion,
       ZIO %% "zio-http" % "3.0.0-RC4+81-57502a13-SNAPSHOT",
