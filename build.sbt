@@ -11,7 +11,7 @@ lazy val root = project
     resolvers ++= Resolver.sonatypeOssRepos("snapshots"),
     libraryDependencies ++= Seq(
       ZIO %% "zio" % zioVersion,
-      ZIO %% "zio-http" % "3.0.0-RC4+60-aecd87cb-SNAPSHOT",
+      ZIO %% "zio-http" % "3.0.0-RC4+81-57502a13-SNAPSHOT",
       ZIO %% "zio-logging" % "2.2.0",
       ZIO %% "zio-test" % zioVersion % Test,
       ZIO %% "zio-test-sbt" % zioVersion % Test
