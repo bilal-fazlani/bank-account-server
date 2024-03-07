@@ -16,7 +16,7 @@ Swagger UI is available at http://localhost:9000/docs/openapi
 ### Download JAR
 
 ```bash
-curl -LO https://github.com/bilal-fazlani/bank-account-server/releases/download/v0.1.0-SNAPSHOT/bank-server.jar
+curl -LO https://github.com/bilal-fazlani/bank-account-server/releases/download/v0.2.0-SNAPSHOT/bank-server.jar
 
 chmod +x bank-server.jar
 ```
@@ -26,7 +26,7 @@ chmod +x bank-server.jar
 ```bash
 sbt publishLocal
 
-coursier bootstrap -r sonatype:snapshots -f -o bank-server.jar --standalone com.bilal-fazlani::bank-account-server:0.1.0-SNAPSHOT
+coursier bootstrap -r sonatype:snapshots -f -o bank-server.jar --standalone com.bilal-fazlani::bank-account-server:0.2.0-SNAPSHOT
 ```
 
 ### Run
