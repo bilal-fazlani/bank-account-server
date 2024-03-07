@@ -15,11 +15,7 @@ case class AccountNotFound(accountId: AccountId, message: String = "could not fi
 case class InsufficientFunds(accountId: AccountId, message: String = "withdrawal failed due to insufficient funds")
     derives Schema
 case class UnexpectedServerError(message: String) derives Schema
-
-//transaction related
-case class TransactionInProgress(transactionId: TransactionId, message: String = "transaction in progress")
-    derives Schema
-case class TransactionCompleted(transactionId: TransactionId, message: String = "transaction already completed")
+case class DuplicateTransaction(transactionId: TransactionId, message: String = "this transaction is already executed")
     derives Schema
 
 object AccountEndpoints:
@@ -51,7 +47,7 @@ object AccountEndpoints:
         HttpCodec.error[UnexpectedServerError](Status.InternalServerError) ?? Doc.p(
           "server encountered an unexpected error"
         )
-      )
+      ) ?? (Doc.h1("new account") + Doc.p("creates a new account with given account id"))
 
   val deposit =
     Endpoint(Method.POST / accountIdCodec / "deposit" / amountCodec)
@@ -63,8 +59,9 @@ object AccountEndpoints:
         HttpCodec.error[AccountNotFound](Status.NotFound) ?? Doc.p("could not find this account"),
         HttpCodec.error[UnexpectedServerError](Status.InternalServerError) ?? Doc.p(
           "server encountered an unexpected error"
-        )
-      )
+        ),
+        HttpCodec.error[DuplicateTransaction](Status.Conflict) ?? Doc.p("this transaction is already executed")
+      ) ?? (Doc.h1("deposit money") + Doc.p("deposits given amount to given account id"))
 
   val withdraw = Endpoint(Method.POST / accountIdCodec / "withdraw" / amountCodec)
     .query(delayQuery)
@@ -76,8 +73,9 @@ object AccountEndpoints:
       HttpCodec.error[InsufficientFunds](Status.BadRequest) ?? Doc.p("withdrawal failed due to insufficient funds"),
       HttpCodec.error[UnexpectedServerError](Status.InternalServerError) ?? Doc.p(
         "server encountered an unexpected error"
-      )
-    ) ?? Doc.h2("withdraws money from given account")
+      ),
+      HttpCodec.error[DuplicateTransaction](Status.Conflict) ?? Doc.p("this transaction is already executed")
+    ) ?? (Doc.h1("withdraw money") + Doc.p("withdraws given amount from given account id"))
 
   val balance =
     Endpoint(Method.GET / accountIdCodec / "balance")
@@ -89,7 +87,7 @@ object AccountEndpoints:
           "server encountered an unexpected error"
         )
       )
-      .out[Int] ?? Doc.h2("returns the balance of given account")
+      .out[Int] ?? (Doc.h1("account balance") + Doc.p("returns the balance of given account id"))
 
   val openApi = OpenAPIGen.fromEndpoints(
     "Bank Account API",

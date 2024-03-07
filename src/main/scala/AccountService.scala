@@ -16,14 +16,14 @@ trait AccountService:
       delay: Option[Delay],
       die: Option[Die],
       transactionId: TransactionId
-  ): ZIO[Any, AccountNotFound | UnexpectedServerError, Unit]
+  ): ZIO[Any, AccountNotFound | DuplicateTransaction | UnexpectedServerError, Unit]
   def withdraw(
       accountId: AccountId,
       amount: Amount,
       delay: Option[Delay],
       die: Option[Die],
       transactionId: TransactionId
-  ): ZIO[Any, AccountNotFound | InsufficientFunds | UnexpectedServerError, Unit]
+  ): ZIO[Any, AccountNotFound | DuplicateTransaction | InsufficientFunds | UnexpectedServerError, Unit]
   def balance(
       accountId: AccountId,
       delay: Option[Delay],
@@ -33,7 +33,47 @@ trait AccountService:
 object AccountService:
   val live = ZLayer.derive[AccountServiceImpl]
 
-class AccountServiceImpl(state: Ref.Synchronized[Map[AccountId, Amount]]) extends AccountService:
+case class State(accounts: Map[AccountId, Amount] = Map.empty, transactions: Set[TransactionId] = Set.empty):
+  def addAmount(
+      accountId: AccountId,
+      amount: Amount,
+      transactionId: TransactionId
+  ): Either[AccountNotFound | DuplicateTransaction, State] =
+    if accounts.contains(accountId) && !transactions.contains(transactionId) then
+      Right(
+        copy(
+          accounts = accounts.updated(accountId, Amount(accounts(accountId) + amount)),
+          transactions = transactions + transactionId
+        )
+      )
+    else if !accounts.contains(accountId) then Left(AccountNotFound(accountId))
+    else Left(DuplicateTransaction(transactionId))
+
+  def withdrawAmount(
+      accountId: AccountId,
+      amount: Amount,
+      transactionId: TransactionId
+  ): Either[AccountNotFound | InsufficientFunds | DuplicateTransaction, State] =
+    if accounts.contains(accountId) && !transactions.contains(transactionId) then
+      if accounts(accountId) >= amount then
+        Right(
+          copy(
+            accounts = accounts.updated(accountId, Amount(accounts(accountId) - amount)),
+            transactions = transactions + transactionId
+          )
+        )
+      else Left(InsufficientFunds(accountId))
+    else if !accounts.contains(accountId) then Left(AccountNotFound(accountId))
+    else Left(DuplicateTransaction(transactionId))
+
+  def creeateAccount(accountId: AccountId): Either[AccountAlreadyExists, State] =
+    if accounts.contains(accountId) then Left(AccountAlreadyExists(accountId))
+    else Right(copy(accounts = accounts.updated(accountId, Amount(0))))
+
+  def getBalance(accountId: AccountId): Either[AccountNotFound, Amount] =
+    accounts.get(accountId).toRight(AccountNotFound(accountId))
+
+class AccountServiceImpl(state: Ref.Synchronized[State]) extends AccountService:
 
   private def withQueries[R, E, A](delay: Option[Int], die: Option[Boolean])(
       zio: ZIO[R, E, A]
@@ -59,12 +99,9 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[AccountId, Amount]]) extend
       die: Option[Die]
   ) =
     withQueries(delay, die) {
-      state.updateZIO { map =>
-        if map.contains(accountId) then
-          ZIO.logError(s"Account $accountId already exists") *> ZIO.fail(
-            AccountAlreadyExists(accountId)
-          )
-        else ZIO.succeed(map.updated(accountId, Amount(0))) <* ZIO.logInfo(s"Account $accountId created")
+      state.updateZIO { state =>
+        ZIO.fromEither(state.creeateAccount(accountId)).tapError(e => ZIO.logError(e.toString)) <*
+          ZIO.logInfo(s"Created account $accountId")
       }
     }
 
@@ -76,12 +113,9 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[AccountId, Amount]]) extend
       transactionId: TransactionId
   ) =
     withQueries(delay, die) {
-      state.updateZIO { map =>
-        if map.contains(accountId) then
-          ZIO.succeed(map.updated(accountId, Amount(map(accountId) + amount))) <* ZIO.logInfo(
-            s"Deposited $amount to account $accountId"
-          )
-        else ZIO.logError(s"Account $accountId not found") *> ZIO.fail(AccountNotFound(accountId))
+      state.updateZIO { state =>
+        ZIO.fromEither(state.addAmount(accountId, amount, transactionId)).tapError(e => ZIO.logError(e.toString)) <*
+          ZIO.logInfo(s"Deposited $amount to account $accountId")
       }
     }
 
@@ -93,27 +127,15 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[AccountId, Amount]]) extend
       transactionId: TransactionId
   ) =
     withQueries(delay, die) {
-      state.updateZIO { map =>
-        if map.contains(accountId) then
-          if map(accountId) >= amount then
-            ZIO.succeed(map.updated(accountId, Amount(map(accountId) - amount))) <* ZIO.logInfo(
-              s"Withdrew $amount from account $accountId"
-            )
-          else
-            ZIO.logError(s"Account $accountId has insufficient funds") *> ZIO.fail(
-              InsufficientFunds(accountId)
-            )
-        else
-          ZIO.logError(s"Account $accountId has insufficient funds") *> ZIO.fail(
-            AccountNotFound(accountId)
-          )
+      state.updateZIO { state =>
+        ZIO
+          .fromEither(state.withdrawAmount(accountId, amount, transactionId))
+          .tapError(e => ZIO.logError(e.toString)) <*
+          ZIO.logInfo(s"Withdrew $amount from account $accountId")
       }
     }
 
   def balance(accountId: AccountId, delay: Option[Delay], die: Option[Die]) =
     withQueries(delay, die) {
-      state.get.flatMap(map =>
-        if map.contains(accountId) then ZIO.succeed(map(accountId)) <* ZIO.logInfo(s"Balance of account $accountId")
-        else ZIO.logError(s"Account $accountId not found") *> ZIO.fail(AccountNotFound(accountId))
-      )
+      state.get.flatMap(state => ZIO.fromEither(state.getBalance(accountId)).tapError(e => ZIO.logError(e.toString)))
     }
