@@ -16,17 +16,33 @@ case class InsufficientFunds(accountId: AccountId, message: String = "withdrawal
     derives Schema
 case class UnexpectedServerError(message: String) derives Schema
 
+//transaction related
+case class TransactionInProgress(transactionId: TransactionId, message: String = "transaction in progress")
+    derives Schema
+case class TransactionCompleted(transactionId: TransactionId, message: String = "transaction already completed")
+    derives Schema
+
 object AccountEndpoints:
-  private val delayQuery = QueryCodec.queryInt("delay").optional ?? Doc.p(
+
+  private val accountIdCodec = string("accountId").transform(AccountId.apply)(identity)
+  private val amountCodec = int("amount").transform(Amount.apply)(identity)
+  private val transactionIdCodec = string("transactionId").transform(TransactionId.apply)(identity)
+
+  private val delayQuery = QueryCodec.queryInt("delay").transform(Delay.apply)(identity).optional ?? Doc.p(
     "if an integer value is provided, api will add delay of given seconds"
   )
 
-  private val dieQuery = QueryCodec.queryBool("die").optional ?? Doc.p(
+  private val dieQuery = QueryCodec.queryBool("die").transform(Die.apply)(identity).optional ?? Doc.p(
     "if set to true, api will return 500 internal server error"
   )
 
+  private val transactionHeader =
+    HeaderCodec.name[String]("transactionId").transform(TransactionId.apply)(identity) ?? Doc.p(
+      "transaction id should be unique across different transactions but same for retries of same transaction"
+    )
+
   val createAccount =
-    Endpoint(Method.POST / string("accountId"))
+    Endpoint(Method.POST / accountIdCodec)
       .query(delayQuery)
       .query(dieQuery)
       .out[Unit]
@@ -38,9 +54,10 @@ object AccountEndpoints:
       )
 
   val deposit =
-    Endpoint(Method.POST / string("accountId") / "deposit" / int("amount"))
+    Endpoint(Method.POST / accountIdCodec / "deposit" / amountCodec)
       .query(delayQuery)
       .query(dieQuery)
+      .header(transactionHeader)
       .out[Unit]
       .outErrors(
         HttpCodec.error[AccountNotFound](Status.NotFound) ?? Doc.p("could not find this account"),
@@ -49,9 +66,10 @@ object AccountEndpoints:
         )
       )
 
-  val withdraw = Endpoint(Method.POST / string("accountId") / "withdraw" / int("amount"))
+  val withdraw = Endpoint(Method.POST / accountIdCodec / "withdraw" / amountCodec)
     .query(delayQuery)
     .query(dieQuery)
+    .header(transactionHeader)
     .out[Unit]
     .outErrors(
       HttpCodec.error[AccountNotFound](Status.NotFound) ?? Doc.p("could not find this account"),
@@ -62,7 +80,7 @@ object AccountEndpoints:
     ) ?? Doc.h2("withdraws money from given account")
 
   val balance =
-    Endpoint(Method.GET / string("accountId") / "balance")
+    Endpoint(Method.GET / accountIdCodec / "balance")
       .query(delayQuery)
       .query(dieQuery)
       .outErrors(

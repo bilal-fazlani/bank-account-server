@@ -7,25 +7,27 @@ import zio.http.codec.HttpCodec
 trait AccountService:
   def createAccount(
       accountId: AccountId,
-      delay: Option[Int],
-      die: Option[Boolean]
+      delay: Option[Delay],
+      die: Option[Die]
   ): ZIO[Any, AccountAlreadyExists | UnexpectedServerError, Unit]
   def deposit(
-      accountId: String,
+      accountId: AccountId,
       amount: Amount,
-      delay: Option[Int],
-      die: Option[Boolean]
+      delay: Option[Delay],
+      die: Option[Die],
+      transactionId: TransactionId
   ): ZIO[Any, AccountNotFound | UnexpectedServerError, Unit]
   def withdraw(
       accountId: AccountId,
       amount: Amount,
-      delay: Option[Int],
-      die: Option[Boolean]
+      delay: Option[Delay],
+      die: Option[Die],
+      transactionId: TransactionId
   ): ZIO[Any, AccountNotFound | InsufficientFunds | UnexpectedServerError, Unit]
   def balance(
       accountId: AccountId,
-      delay: Option[Int],
-      die: Option[Boolean]
+      delay: Option[Delay],
+      die: Option[Die]
   ): ZIO[Any, AccountNotFound | UnexpectedServerError, Int]
 
 object AccountService:
@@ -53,8 +55,8 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[AccountId, Amount]]) extend
 
   def createAccount(
       accountId: AccountId,
-      delay: Option[Int],
-      die: Option[Boolean]
+      delay: Option[Delay],
+      die: Option[Die]
   ) =
     withQueries(delay, die) {
       state.updateZIO { map =>
@@ -69,8 +71,9 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[AccountId, Amount]]) extend
   def deposit(
       accountId: AccountId,
       amount: Amount,
-      delay: Option[Int],
-      die: Option[Boolean]
+      delay: Option[Delay],
+      die: Option[Die],
+      transactionId: TransactionId
   ) =
     withQueries(delay, die) {
       state.updateZIO { map =>
@@ -85,8 +88,9 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[AccountId, Amount]]) extend
   def withdraw(
       accountId: AccountId,
       amount: Amount,
-      delay: Option[Int],
-      die: Option[Boolean]
+      delay: Option[Delay],
+      die: Option[Die],
+      transactionId: TransactionId
   ) =
     withQueries(delay, die) {
       state.updateZIO { map =>
@@ -106,7 +110,7 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[AccountId, Amount]]) extend
       }
     }
 
-  def balance(accountId: AccountId, delay: Option[Int], die: Option[Boolean]) =
+  def balance(accountId: AccountId, delay: Option[Delay], die: Option[Die]) =
     withQueries(delay, die) {
       state.get.flatMap(map =>
         if map.contains(accountId) then ZIO.succeed(map(accountId)) <* ZIO.logInfo(s"Balance of account $accountId")

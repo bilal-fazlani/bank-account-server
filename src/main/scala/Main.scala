@@ -23,5 +23,5 @@ object Main extends ZIOAppDefault:
       Server.defaultWith(_.port(9000)),
       AccountRoutes.live,
       AccountService.live,
-      ZLayer(Ref.Synchronized.make(Map.empty[String, Int]))
+      ZLayer(Ref.Synchronized.make(Map.empty[AccountId, Amount]))
     )
