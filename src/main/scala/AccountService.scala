@@ -6,24 +6,24 @@ import zio.http.codec.HttpCodec
 
 trait AccountService:
   def createAccount(
-      accountId: String,
+      accountId: AccountId,
       delay: Option[Int],
       die: Option[Boolean]
   ): ZIO[Any, AccountAlreadyExists | UnexpectedServerError, Unit]
   def deposit(
       accountId: String,
-      amount: Int,
+      amount: Amount,
       delay: Option[Int],
       die: Option[Boolean]
   ): ZIO[Any, AccountNotFound | UnexpectedServerError, Unit]
   def withdraw(
-      accountId: String,
-      amount: Int,
+      accountId: AccountId,
+      amount: Amount,
       delay: Option[Int],
       die: Option[Boolean]
   ): ZIO[Any, AccountNotFound | InsufficientFunds | UnexpectedServerError, Unit]
   def balance(
-      accountId: String,
+      accountId: AccountId,
       delay: Option[Int],
       die: Option[Boolean]
   ): ZIO[Any, AccountNotFound | UnexpectedServerError, Int]
@@ -31,7 +31,7 @@ trait AccountService:
 object AccountService:
   val live = ZLayer.derive[AccountServiceImpl]
 
-class AccountServiceImpl(state: Ref.Synchronized[Map[String, Int]]) extends AccountService:
+class AccountServiceImpl(state: Ref.Synchronized[Map[AccountId, Amount]]) extends AccountService:
 
   private def withQueries[R, E, A](delay: Option[Int], die: Option[Boolean])(
       zio: ZIO[R, E, A]
@@ -52,7 +52,7 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[String, Int]]) extends Acco
     } yield value
 
   def createAccount(
-      accountId: String,
+      accountId: AccountId,
       delay: Option[Int],
       die: Option[Boolean]
   ) =
@@ -62,20 +62,20 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[String, Int]]) extends Acco
           ZIO.logError(s"Account $accountId already exists") *> ZIO.fail(
             AccountAlreadyExists(accountId)
           )
-        else ZIO.succeed(map.updated(accountId, 0)) <* ZIO.logInfo(s"Account $accountId created")
+        else ZIO.succeed(map.updated(accountId, Amount(0))) <* ZIO.logInfo(s"Account $accountId created")
       }
     }
 
   def deposit(
-      accountId: String,
-      amount: Int,
+      accountId: AccountId,
+      amount: Amount,
       delay: Option[Int],
       die: Option[Boolean]
   ) =
     withQueries(delay, die) {
       state.updateZIO { map =>
         if map.contains(accountId) then
-          ZIO.succeed(map.updated(accountId, map(accountId) + amount)) <* ZIO.logInfo(
+          ZIO.succeed(map.updated(accountId, Amount(map(accountId) + amount))) <* ZIO.logInfo(
             s"Deposited $amount to account $accountId"
           )
         else ZIO.logError(s"Account $accountId not found") *> ZIO.fail(AccountNotFound(accountId))
@@ -83,8 +83,8 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[String, Int]]) extends Acco
     }
 
   def withdraw(
-      accountId: String,
-      amount: Int,
+      accountId: AccountId,
+      amount: Amount,
       delay: Option[Int],
       die: Option[Boolean]
   ) =
@@ -92,7 +92,7 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[String, Int]]) extends Acco
       state.updateZIO { map =>
         if map.contains(accountId) then
           if map(accountId) >= amount then
-            ZIO.succeed(map.updated(accountId, map(accountId) - amount)) <* ZIO.logInfo(
+            ZIO.succeed(map.updated(accountId, Amount(map(accountId) - amount))) <* ZIO.logInfo(
               s"Withdrew $amount from account $accountId"
             )
           else
@@ -106,7 +106,7 @@ class AccountServiceImpl(state: Ref.Synchronized[Map[String, Int]]) extends Acco
       }
     }
 
-  def balance(accountId: String, delay: Option[Int], die: Option[Boolean]) =
+  def balance(accountId: AccountId, delay: Option[Int], die: Option[Boolean]) =
     withQueries(delay, die) {
       state.get.flatMap(map =>
         if map.contains(accountId) then ZIO.succeed(map(accountId)) <* ZIO.logInfo(s"Balance of account $accountId")

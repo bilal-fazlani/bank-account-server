@@ -7,10 +7,12 @@ import zio.http.endpoint.openapi.OpenAPIGen
 import zio.http.endpoint.openapi.JsonSchema.SchemaStyle
 import zio.http.codec.QueryCodec
 import zio.http.codec.Doc
+import zio.http.codec.HeaderCodec
+import neotype.zioschema.{given, *}
 
-case class AccountAlreadyExists(accountId: String, message: String = "this account id already exists") derives Schema
-case class AccountNotFound(accountId: String, message: String = "could not find this account") derives Schema
-case class InsufficientFunds(accountId: String, message: String = "withdrawal failed due to insufficient funds")
+case class AccountAlreadyExists(accountId: AccountId, message: String = "this account id already exists") derives Schema
+case class AccountNotFound(accountId: AccountId, message: String = "could not find this account") derives Schema
+case class InsufficientFunds(accountId: AccountId, message: String = "withdrawal failed due to insufficient funds")
     derives Schema
 case class UnexpectedServerError(message: String) derives Schema
 
