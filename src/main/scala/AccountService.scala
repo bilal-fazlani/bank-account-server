@@ -51,7 +51,9 @@ case class State(accounts: Map[AccountId, Amount] = Map.empty, transactions: Set
         )
       )
     else if !accounts.contains(accountId) then Left(AccountNotFound(accountId))
-    else Left(DuplicateTransaction(transactionId))
+    else
+      val account = Account(accountId, accounts(accountId))
+      Left(DuplicateTransaction(transactionId, account))
 
   def withdrawAmount(
       accountId: AccountId,
@@ -71,10 +73,14 @@ case class State(accounts: Map[AccountId, Amount] = Map.empty, transactions: Set
         )
       else Right(WithdrawResult.InsufficientFunds(copy(transactions = tId)))
     else if !accounts.contains(accountId) then Left(AccountNotFound(accountId))
-    else Left(DuplicateTransaction(transactionId))
+    else
+      val account = Account(accountId, accounts(accountId))
+      Left(DuplicateTransaction(transactionId, account))
 
   def creeateAccount(accountId: AccountId): Either[AccountAlreadyExists, State] =
-    if accounts.contains(accountId) then Left(AccountAlreadyExists(accountId))
+    if accounts.contains(accountId) then
+      val account = Account(accountId, accounts(accountId))
+      Left(AccountAlreadyExists(account))
     else Right(copy(accounts = accounts.updated(accountId, Amount(0))))
 
   def getBalance(accountId: AccountId): Either[AccountNotFound, Amount] =
@@ -147,14 +153,18 @@ class AccountServiceImpl(state: Ref.Synchronized[State]) extends AccountService:
           ZIO
             .fromEither(state.withdrawAmount(accountId, amount, transactionId))
             .map {
-              case WithdrawResult.Withdrew(newState)          => ((true, Account(accountId, newState.accounts(accountId))), newState)
-              case WithdrawResult.InsufficientFunds(newState) => ((false, Account(accountId, newState.accounts(accountId))), newState)
+              case WithdrawResult.Withdrew(newState) =>
+                ((true, Account(accountId, newState.accounts(accountId))), newState)
+              case WithdrawResult.InsufficientFunds(newState) =>
+                ((false, Account(accountId, newState.accounts(accountId))), newState)
             }
             .tap(_ => ZIO.logInfo(s"Withdrew $amount from account $accountId"))
         }
-        .filterOrFail(_._1)(InsufficientFunds(accountId))
+        .flatMap {
+          case (result, account) if result == true => ZIO.succeed(account)
+          case (result, account)                   => ZIO.fail(InsufficientFunds(transactionId, account))
+        }
         .tapError(e => ZIO.logError(e.toString))
-        .map(_._2)
     }
 
   def balance(accountId: AccountId, delay: Option[Delay], die: Option[Die]) =

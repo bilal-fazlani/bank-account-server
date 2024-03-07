@@ -11,17 +11,22 @@ import zio.http.codec.HeaderCodec
 import neotype.zioschema.{given, *}
 
 case class AccountAlreadyExists(
-    accountId: AccountId,
+    account: Account,
     message: String = "this account id already exists"
 ) derives Schema
+
 case class AccountNotFound(accountId: AccountId, message: String = "could not find this account") derives Schema
 case class InsufficientFunds(
-    accountId: AccountId,
+    transactionId: TransactionId,
+    account: Account,
     message: String = "withdrawal failed due to insufficient funds"
 ) derives Schema
+
 case class UnexpectedServerError(message: String) derives Schema
+
 case class DuplicateTransaction(
     transactionId: TransactionId,
+    account: Account,
     message: String = "this transaction is already executed"
 ) derives Schema
 
