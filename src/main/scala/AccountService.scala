@@ -9,26 +9,26 @@ trait AccountService:
       accountId: AccountId,
       delay: Option[Delay],
       die: Option[Die]
-  ): ZIO[Any, AccountAlreadyExists | UnexpectedServerError, Unit]
+  ): ZIO[Any, AccountAlreadyExists | UnexpectedServerError, Account]
   def deposit(
       accountId: AccountId,
       amount: Amount,
       delay: Option[Delay],
       die: Option[Die],
       transactionId: TransactionId
-  ): ZIO[Any, AccountNotFound | DuplicateTransaction | UnexpectedServerError, Unit]
+  ): ZIO[Any, AccountNotFound | DuplicateTransaction | UnexpectedServerError, Account]
   def withdraw(
       accountId: AccountId,
       amount: Amount,
       delay: Option[Delay],
       die: Option[Die],
       transactionId: TransactionId
-  ): ZIO[Any, AccountNotFound | DuplicateTransaction | InsufficientFunds | UnexpectedServerError, Unit]
+  ): ZIO[Any, AccountNotFound | DuplicateTransaction | InsufficientFunds | UnexpectedServerError, Account]
   def balance(
       accountId: AccountId,
       delay: Option[Delay],
       die: Option[Die]
-  ): ZIO[Any, AccountNotFound | UnexpectedServerError, Int]
+  ): ZIO[Any, AccountNotFound | UnexpectedServerError, Account]
 
 object AccountService:
   val live = ZLayer.derive[AccountServiceImpl]
@@ -106,9 +106,12 @@ class AccountServiceImpl(state: Ref.Synchronized[State]) extends AccountService:
       die: Option[Die]
   ) =
     withQueries(delay, die) {
-      state.updateZIO { state =>
-        ZIO.fromEither(state.creeateAccount(accountId)).tapError(e => ZIO.logError(e.toString)) <*
-          ZIO.logInfo(s"Created account $accountId")
+      state.modifyZIO { state =>
+        for
+          newState <- ZIO.fromEither(state.creeateAccount(accountId)).tapError(e => ZIO.logError(e.toString))
+          _ <- ZIO.logInfo(s"Created account $accountId")
+          account = Account(accountId, newState.accounts(accountId))
+        yield (account, newState)
       }
     }
 
@@ -120,9 +123,14 @@ class AccountServiceImpl(state: Ref.Synchronized[State]) extends AccountService:
       transactionId: TransactionId
   ) =
     withQueries(delay, die) {
-      state.updateZIO { state =>
-        ZIO.fromEither(state.addAmount(accountId, amount, transactionId)).tapError(e => ZIO.logError(e.toString)) <*
-          ZIO.logInfo(s"Deposited $amount to account $accountId")
+      state.modifyZIO { state =>
+        for
+          newState <- ZIO
+            .fromEither(state.addAmount(accountId, amount, transactionId))
+            .tapError(e => ZIO.logError(e.toString))
+          _ <- ZIO.logInfo(s"Deposited $amount to account $accountId")
+          account = Account(accountId, newState.accounts(accountId))
+        yield (account, newState)
       }
     }
 
@@ -139,17 +147,23 @@ class AccountServiceImpl(state: Ref.Synchronized[State]) extends AccountService:
           ZIO
             .fromEither(state.withdrawAmount(accountId, amount, transactionId))
             .map {
-              case WithdrawResult.Withdrew(newState)          => (true, newState)
-              case WithdrawResult.InsufficientFunds(newState) => (false, newState)
+              case WithdrawResult.Withdrew(newState)          => ((true, Account(accountId, newState.accounts(accountId))), newState)
+              case WithdrawResult.InsufficientFunds(newState) => ((false, Account(accountId, newState.accounts(accountId))), newState)
             }
+            .tap(_ => ZIO.logInfo(s"Withdrew $amount from account $accountId"))
         }
-        .filterOrFail(identity)(InsufficientFunds(accountId))
-        .unit
-        .tapError(e => ZIO.logError(e.toString)) <*
-        ZIO.logInfo(s"Withdrew $amount from account $accountId")
+        .filterOrFail(_._1)(InsufficientFunds(accountId))
+        .tapError(e => ZIO.logError(e.toString))
+        .map(_._2)
     }
 
   def balance(accountId: AccountId, delay: Option[Delay], die: Option[Die]) =
     withQueries(delay, die) {
-      state.get.flatMap(state => ZIO.fromEither(state.getBalance(accountId)).tapError(e => ZIO.logError(e.toString)))
+      state.get
+        .flatMap(state =>
+          ZIO
+            .fromEither(state.getBalance(accountId))
+            .tapError(e => ZIO.logError(e.toString))
+        )
+        .map(balance => Account(accountId, balance))
     }

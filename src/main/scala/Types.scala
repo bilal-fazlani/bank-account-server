@@ -1,4 +1,6 @@
 import neotype.*
+import zio.schema.*
+import neotype.zioschema.{given, *}
 
 type AccountId = AccountId.Type
 object AccountId extends Subtype[String]
@@ -14,3 +16,5 @@ object Delay extends Subtype[Int]
 
 type Die = Die.Type
 object Die extends Subtype[Boolean]
+
+case class Account(id: AccountId, balance: Amount) derives Schema

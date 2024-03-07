@@ -10,13 +10,20 @@ import zio.http.codec.Doc
 import zio.http.codec.HeaderCodec
 import neotype.zioschema.{given, *}
 
-case class AccountAlreadyExists(accountId: AccountId, message: String = "this account id already exists") derives Schema
+case class AccountAlreadyExists(
+    accountId: AccountId,
+    message: String = "this account id already exists"
+) derives Schema
 case class AccountNotFound(accountId: AccountId, message: String = "could not find this account") derives Schema
-case class InsufficientFunds(accountId: AccountId, message: String = "withdrawal failed due to insufficient funds")
-    derives Schema
+case class InsufficientFunds(
+    accountId: AccountId,
+    message: String = "withdrawal failed due to insufficient funds"
+) derives Schema
 case class UnexpectedServerError(message: String) derives Schema
-case class DuplicateTransaction(transactionId: TransactionId, message: String = "this transaction is already executed")
-    derives Schema
+case class DuplicateTransaction(
+    transactionId: TransactionId,
+    message: String = "this transaction is already executed"
+) derives Schema
 
 object AccountEndpoints:
 
@@ -41,7 +48,7 @@ object AccountEndpoints:
     Endpoint(Method.POST / accountIdCodec)
       .query(delayQuery)
       .query(dieQuery)
-      .out[Unit]
+      .out[Account]
       .outErrors(
         HttpCodec.error[AccountAlreadyExists](Status.Conflict) ?? Doc.p("this account id already exists"),
         HttpCodec.error[UnexpectedServerError](Status.InternalServerError) ?? Doc.p(
@@ -54,7 +61,7 @@ object AccountEndpoints:
       .query(delayQuery)
       .query(dieQuery)
       .header(transactionHeader)
-      .out[Unit]
+      .out[Account]
       .outErrors(
         HttpCodec.error[AccountNotFound](Status.NotFound) ?? Doc.p("could not find this account"),
         HttpCodec.error[UnexpectedServerError](Status.InternalServerError) ?? Doc.p(
@@ -67,7 +74,7 @@ object AccountEndpoints:
     .query(delayQuery)
     .query(dieQuery)
     .header(transactionHeader)
-    .out[Unit]
+    .out[Account]
     .outErrors(
       HttpCodec.error[AccountNotFound](Status.NotFound) ?? Doc.p("could not find this account"),
       HttpCodec.error[InsufficientFunds](Status.BadRequest) ?? Doc.p("withdrawal failed due to insufficient funds"),
@@ -87,7 +94,7 @@ object AccountEndpoints:
           "server encountered an unexpected error"
         )
       )
-      .out[Int] ?? (Doc.h1("account balance") + Doc.p("returns the balance of given account id"))
+      .out[Account] ?? (Doc.h1("account balance") + Doc.p("returns the balance of given account id"))
 
   val openApi = OpenAPIGen.fromEndpoints(
     "Bank Account API",
