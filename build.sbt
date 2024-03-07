@@ -7,7 +7,7 @@ lazy val root = project
   .in(file("."))
   .settings(
     name := "bank-account-server",
-    version := "0.2.0-SNAPSHOT",
+    version := "0.3.0-SNAPSHOT",
     scalaVersion := scala3Version,
     resolvers ++= Resolver.sonatypeOssRepos("snapshots"),
     organization := "com.bilal-fazlani",
